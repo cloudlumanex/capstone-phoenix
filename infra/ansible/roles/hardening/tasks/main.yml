@@ -1,0 +1,65 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install required packages
+  apt:
+    name:
+      - ufw
+      - fail2ban
+      - curl
+      - wget
+      - git
+    state: present
+
+- name: Allow SSH through ufw
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow HTTP through ufw
+  ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+
+- name: Allow HTTPS through ufw
+  ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+
+- name: Enable ufw with default deny incoming
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Enable fail2ban service
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+
+- name: Disable root SSH login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+  notify: restart sshd
+
+- name: Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
+  notify: restart sshd
+
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
