@@ -42,3 +42,33 @@
 - name: Set server private IP fact
   set_fact:
     k3s_server_private_ip: "{{ ansible_default_ipv4.address }}"
+
+- name: Switch Calico to VXLAN backend (AWS-friendly, avoids BGP issues)
+  shell: |
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    kubectl patch configmap calico-config -n kube-system --type='merge' -p '{"data":{"calico_backend":"vxlan"}}'
+    kubectl patch ippool default-ipv4-ippool --type='merge' -p '{"spec":{"ipipMode":"Never","vxlanMode":"Always"}}'
+  retries: 3
+  delay: 10
+
+- name: Remove BIRD/BGP checks from calico-node probes (VXLAN mode does not run BIRD)
+  shell: |
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    kubectl patch daemonset calico-node -n kube-system --type='json' -p='[
+      {"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe/exec/command", "value": ["/bin/calico-node", "-felix-ready"]},
+      {"op": "replace", "path": "/spec/template/spec/containers/0/livenessProbe/exec/command", "value": ["/bin/calico-node", "-felix-live"]}
+    ]'
+  retries: 3
+  delay: 10
+
+- name: Restart calico-node pods to apply VXLAN config
+  shell: |
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    kubectl delete pods -n kube-system -l k8s-app=calico-node
+  retries: 3
+  delay: 10
+
+- name: Wait for Calico pods to be ready
+  shell: |
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n kube-system --timeout=120s

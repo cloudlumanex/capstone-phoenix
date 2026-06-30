@@ -39,3 +39,12 @@ resource "aws_instance" "workers" {
     Role = "worker"
   }
 }
+
+resource "aws_eip" "control_plane" {
+  instance = aws_instance.control_plane.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "phoenix-control-plane-eip"
+  }
+}
